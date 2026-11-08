@@ -1,0 +1,141 @@
+# Local stack: PostgreSQL + Keycloak + single-broker Kafka (KRaft).
+#   docker compose up -d                       -> infrastructure only, run the app from your IDE / mvn
+#   docker compose --profile app up -d --build -> infrastructure + the API container
+# All values come from .env.
+name: retail-stock
+
+services:
+  postgres:
+    image: ${POSTGRES_IMAGE}
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_SUPERUSER}
+      POSTGRES_PASSWORD: ${POSTGRES_SUPERUSER_PASSWORD}
+      POSTGRES_DB: postgres
+      APP_DB_NAME: ${POSTGRES_DB}
+      APP_DB_USER: ${POSTGRES_APP_USER}
+      APP_DB_PASSWORD: ${POSTGRES_APP_PASSWORD}
+      KEYCLOAK_DB_NAME: ${KEYCLOAK_DB}
+      KEYCLOAK_DB_USER: ${KEYCLOAK_DB_USER}
+      KEYCLOAK_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD}
+    command:
+      - postgres
+      - -c
+      - max_connections=200
+      - -c
+      - shared_buffers=256MB
+      - -c
+      - work_mem=8MB
+      - -c
+      - wal_compression=on
+      - -c
+      - synchronous_commit=on
+      - -c
+      - log_lock_waits=on
+      - -c
+      - deadlock_timeout=500ms
+    ports:
+      - "${POSTGRES_HOST_PORT}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -h 127.0.0.1 -U ${POSTGRES_SUPERUSER} -d ${POSTGRES_DB}" ]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  keycloak:
+    image: ${KEYCLOAK_IMAGE}
+    restart: unless-stopped
+    command: [ "start-dev", "--import-realm" ]
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/${KEYCLOAK_DB}
+      KC_DB_USERNAME: ${KEYCLOAK_DB_USER}
+      KC_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD}
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN_USER}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
+      # Tokens always carry iss=http://localhost:8180/... whether fetched from the host or from containers.
+      KC_HOSTNAME: http://localhost:${KEYCLOAK_HOST_PORT}
+      KC_HOSTNAME_BACKCHANNEL_DYNAMIC: "true"
+      KC_HTTP_ENABLED: "true"
+      KC_HEALTH_ENABLED: "true"
+      KC_METRICS_ENABLED: "true"
+    ports:
+      - "${KEYCLOAK_HOST_PORT}:8080"
+    volumes:
+      - ./keycloak/retail-stock-realm.json:/opt/keycloak/data/import/retail-stock-realm.json:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/9000 && printf 'GET /health/ready HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && grep -q UP <&3" ]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+
+  kafka:
+    image: ${KAFKA_IMAGE}
+    restart: unless-stopped
+    environment:
+      CLUSTER_ID: ${KAFKA_CLUSTER_ID}
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: INTERNAL://:19092,EXTERNAL://:9092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:19092,EXTERNAL://localhost:${KAFKA_HOST_PORT}
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      # Single broker: every internal topic must have RF=1.
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_DEFAULT_REPLICATION_FACTOR: 1
+      KAFKA_MIN_INSYNC_REPLICAS: 1
+      KAFKA_NUM_PARTITIONS: 12
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_LOG_RETENTION_HOURS: 168
+    # Broker storage is intentionally ephemeral locally: PostgreSQL (outbox) is the source of truth.
+    ports:
+      - "${KAFKA_HOST_PORT}:9092"
+    healthcheck:
+      test: [ "CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:19092 >/dev/null 2>&1" ]
+      interval: 10s
+      timeout: 10s
+      retries: 20
+      start_period: 15s
+
+  app:
+    profiles: [ "app" ]
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: retail-stock-api:local
+    restart: unless-stopped
+    environment:
+      APP_ENV: docker
+      LOG_FORMAT: text
+      DB_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB}
+      DB_USER: ${POSTGRES_APP_USER}
+      DB_PASSWORD: ${POSTGRES_APP_PASSWORD}
+      KAFKA_BOOTSTRAP_SERVERS: kafka:19092
+      OIDC_ISSUER: http://localhost:${KEYCLOAK_HOST_PORT}/realms/retail-stock
+      OIDC_JWKS_URL: http://keycloak:8080/realms/retail-stock/protocol/openid-connect/certs
+      OIDC_AUDIENCE: retail-stock-api
+      OIDC_TEAMMATE_CLIENTS: retail-stock-web,retail-stock-dev-cli
+    ports:
+      - "${APP_PORT}:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+
+volumes:
+  postgres-data:

@@ -1,0 +1,41 @@
+<!--
+  LOG_FORMAT=json  -> structured JSON for Datadog (default in Kubernetes)
+  LOG_FORMAT=text  -> human readable (default locally)
+-->
+<configuration>
+    <appender name="text" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{HH:mm:ss.SSS} %-5level [%thread] %logger{36} %X{traceId:-} - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <appender name="json" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+            <fieldNames>
+                <timestamp>timestamp</timestamp>
+                <level>status</level>
+                <thread>thread</thread>
+                <logger>logger.name</logger>
+            </fieldNames>
+            <customFields>{"service":"retail-stock-api"}</customFields>
+        </encoder>
+    </appender>
+
+    <appender name="async" class="ch.qos.logback.classic.AsyncAppender">
+        <queueSize>8192</queueSize>
+        <discardingThreshold>0</discardingThreshold>
+        <neverBlock>true</neverBlock>
+        <appender-ref ref="${LOG_FORMAT:-text}"/>
+    </appender>
+
+    <logger name="org.apache.kafka" level="WARN"/>
+    <logger name="org.apache.kafka.clients.NetworkClient" level="ERROR"/>
+    <logger name="com.zaxxer.hikari" level="INFO"/>
+    <logger name="org.flywaydb" level="INFO"/>
+    <logger name="io.netty" level="WARN"/>
+    <logger name="io.ktor.server.plugins.calllogging" level="INFO"/>
+
+    <root level="${LOG_LEVEL:-INFO}">
+        <appender-ref ref="async"/>
+    </root>
+</configuration>

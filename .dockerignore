@@ -1,0 +1,10 @@
+**/target
+.git
+.idea
+*.iml
+k8s
+docs
+scripts
+.e2e
+test.sh
+load-test.sh

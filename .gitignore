@@ -1,0 +1,11 @@
+target/
+*.iml
+.idea/
+.vscode/
+*.log
+k8s/overlays/minikube/tls/
+.e2e/
+.env
+Makefile
+test.sh
+k8s/

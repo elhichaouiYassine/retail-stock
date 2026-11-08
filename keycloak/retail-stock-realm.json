@@ -1,0 +1,399 @@
+{
+  "realm": "retail-stock",
+  "displayName": "Retail Stock",
+  "enabled": true,
+  "sslRequired": "external",
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "resetPasswordAllowed": false,
+  "editUsernameAllowed": false,
+  "bruteForceProtected": true,
+  "failureFactor": 10,
+  "accessTokenLifespan": 300,
+  "ssoSessionIdleTimeout": 1800,
+  "ssoSessionMaxLifespan": 36000,
+  "webAuthnPolicyPasswordlessRpEntityName": "Retail Stock",
+  "webAuthnPolicyPasswordlessRpId": "",
+  "webAuthnPolicyPasswordlessSignatureAlgorithms": [
+    "ES256",
+    "RS256"
+  ],
+  "webAuthnPolicyPasswordlessAttestationConveyancePreference": "not specified",
+  "webAuthnPolicyPasswordlessAuthenticatorAttachment": "not specified",
+  "webAuthnPolicyPasswordlessRequireResidentKey": "Yes",
+  "webAuthnPolicyPasswordlessUserVerificationRequirement": "required",
+  "webAuthnPolicyPasswordlessCreateTimeout": 0,
+  "webAuthnPolicyPasswordlessAvoidSameAuthenticatorRegister": false,
+  "webAuthnPolicyPasswordlessAcceptableAaguids": [],
+  "webAuthnPolicyPasswordlessPasskeysEnabled": true,
+  "roles": {
+    "realm": [
+      {
+        "name": "teammate",
+        "description": "Internal employee (passkey authenticated)"
+      },
+      {
+        "name": "partner",
+        "description": "External retail partner (client credentials)"
+      },
+      {
+        "name": "service",
+        "description": "Internal service-to-service caller"
+      },
+      {
+        "name": "stock:read",
+        "description": "Read stock levels, movements and reservations"
+      },
+      {
+        "name": "stock:write",
+        "description": "Adjust stock (receipts, damages, corrections)"
+      },
+      {
+        "name": "stock:reserve",
+        "description": "Create, commit and release reservations"
+      },
+      {
+        "name": "stock:sync",
+        "description": "Push absolute physical counts"
+      },
+      {
+        "name": "stock:admin",
+        "description": "Operate the platform (dead letters); implies all permissions"
+      }
+    ]
+  },
+  "groups": [
+    {
+      "name": "locations",
+      "path": "/locations",
+      "subGroups": [
+        {
+          "name": "ALL",
+          "path": "/locations/ALL",
+          "subGroups": []
+        },
+        {
+          "name": "STORE-001",
+          "path": "/locations/STORE-001",
+          "subGroups": []
+        },
+        {
+          "name": "STORE-002",
+          "path": "/locations/STORE-002",
+          "subGroups": []
+        },
+        {
+          "name": "STORE-003",
+          "path": "/locations/STORE-003",
+          "subGroups": []
+        },
+        {
+          "name": "DC-NORTH",
+          "path": "/locations/DC-NORTH",
+          "subGroups": []
+        }
+      ]
+    }
+  ],
+  "clients": [
+    {
+      "clientId": "retail-stock-web",
+      "name": "Retail Stock teammates",
+      "description": "Public PKCE client. Teammates sign in with passkeys (scripts/token.sh, test.sh, internal tools).",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "frontchannelLogout": true,
+      "fullScopeAllowed": true,
+      "redirectUris": [
+        "http://localhost:8080/*",
+        "https://stock.local/*"
+      ],
+      "webOrigins": [
+        "+"
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "+"
+      },
+      "protocolMappers": [
+        {
+          "name": "audience-retail-stock-api",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.custom.audience": "retail-stock-api",
+            "id.token.claim": "false",
+            "access.token.claim": "true",
+            "introspection.token.claim": "true"
+          }
+        },
+        {
+          "name": "location-groups",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-group-membership-mapper",
+          "consentRequired": false,
+          "config": {
+            "claim.name": "location_groups",
+            "full.path": "true",
+            "id.token.claim": "false",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true",
+            "introspection.token.claim": "true"
+          }
+        }
+      ]
+    },
+    {
+      "clientId": "retail-stock-dev-cli",
+      "name": "Retail Stock dev CLI (LOCAL ONLY)",
+      "description": "Password grant for curl-based local testing. Rejected by the API when OIDC_TEAMMATE_CLIENTS excludes it (Kubernetes).",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": true,
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": true,
+      "serviceAccountsEnabled": false,
+      "fullScopeAllowed": true,
+      "protocolMappers": [
+        {
+          "name": "audience-retail-stock-api",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.custom.audience": "retail-stock-api",
+            "id.token.claim": "false",
+            "access.token.claim": "true",
+            "introspection.token.claim": "true"
+          }
+        },
+        {
+          "name": "location-groups",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-group-membership-mapper",
+          "consentRequired": false,
+          "config": {
+            "claim.name": "location_groups",
+            "full.path": "true",
+            "id.token.claim": "false",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true",
+            "introspection.token.claim": "true"
+          }
+        }
+      ]
+    },
+    {
+      "clientId": "partner-acme",
+      "name": "ACME Retail partner",
+      "description": "External partner integration: read + reserve on its own stores",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "partner-acme-local-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "fullScopeAllowed": true,
+      "attributes": {
+        "access.token.lifespan": "300"
+      },
+      "protocolMappers": [
+        {
+          "name": "audience-retail-stock-api",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.custom.audience": "retail-stock-api",
+            "id.token.claim": "false",
+            "access.token.claim": "true",
+            "introspection.token.claim": "true"
+          }
+        },
+        {
+          "name": "location-groups",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-group-membership-mapper",
+          "consentRequired": false,
+          "config": {
+            "claim.name": "location_groups",
+            "full.path": "true",
+            "id.token.claim": "false",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true",
+            "introspection.token.claim": "true"
+          }
+        }
+      ]
+    },
+    {
+      "clientId": "retail-stock-sync-service",
+      "name": "Stock sync service",
+      "description": "Internal WMS bridge: read, write and absolute syncs on all locations",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "sync-service-local-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "fullScopeAllowed": true,
+      "attributes": {
+        "access.token.lifespan": "300"
+      },
+      "protocolMappers": [
+        {
+          "name": "audience-retail-stock-api",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.custom.audience": "retail-stock-api",
+            "id.token.claim": "false",
+            "access.token.claim": "true",
+            "introspection.token.claim": "true"
+          }
+        },
+        {
+          "name": "location-groups",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-group-membership-mapper",
+          "consentRequired": false,
+          "config": {
+            "claim.name": "location_groups",
+            "full.path": "true",
+            "id.token.claim": "false",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true",
+            "introspection.token.claim": "true"
+          }
+        }
+      ]
+    }
+  ],
+  "users": [
+    {
+      "username": "alice",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "alice@retail.example",
+      "firstName": "Alice",
+      "lastName": "Operations",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "Alice-Passkey-2026!",
+          "temporary": false
+        }
+      ],
+      "requiredActions": [
+        "webauthn-register-passwordless"
+      ],
+      "realmRoles": [
+        "teammate",
+        "stock:read",
+        "stock:write",
+        "stock:reserve",
+        "stock:sync",
+        "stock:admin"
+      ],
+      "groups": [
+        "/locations/ALL"
+      ]
+    },
+    {
+      "username": "bob",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "bob@retail.example",
+      "firstName": "Bob",
+      "lastName": "Store001",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "Bob-Passkey-2026!",
+          "temporary": false
+        }
+      ],
+      "requiredActions": [
+        "webauthn-register-passwordless"
+      ],
+      "realmRoles": [
+        "teammate",
+        "stock:read",
+        "stock:write",
+        "stock:reserve"
+      ],
+      "groups": [
+        "/locations/STORE-001"
+      ]
+    },
+    {
+      "username": "dev.ops",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "dev.ops@retail.example",
+      "firstName": "Dev",
+      "lastName": "Ops",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "dev-ops-local-pwd",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "teammate",
+        "stock:read",
+        "stock:write",
+        "stock:reserve",
+        "stock:sync",
+        "stock:admin"
+      ],
+      "groups": [
+        "/locations/ALL"
+      ]
+    },
+    {
+      "username": "service-account-partner-acme",
+      "enabled": true,
+      "serviceAccountClientId": "partner-acme",
+      "realmRoles": [
+        "partner",
+        "stock:read",
+        "stock:reserve"
+      ],
+      "groups": [
+        "/locations/STORE-001",
+        "/locations/STORE-002"
+      ]
+    },
+    {
+      "username": "service-account-retail-stock-sync-service",
+      "enabled": true,
+      "serviceAccountClientId": "retail-stock-sync-service",
+      "realmRoles": [
+        "service",
+        "stock:read",
+        "stock:write",
+        "stock:sync"
+      ],
+      "groups": [
+        "/locations/ALL"
+      ]
+    }
+  ]
+}
